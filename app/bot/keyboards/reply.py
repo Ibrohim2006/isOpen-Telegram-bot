@@ -5,7 +5,7 @@ def get_main_menu():
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="👤 Ro'yxatdan o'tish")],
-            [KeyboardButton(text="ℹ️ Ma'lumot")]
+            [KeyboardButton(text="ℹ️ Admin panel")]
         ],
         resize_keyboard=True
     )
@@ -23,3 +23,15 @@ def get_user_type_menu() -> ReplyKeyboardMarkup:
         resize_keyboard=True,
         one_time_keyboard=True
     )
+
+
+def get_admin_keyboard():
+    keyboard = ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="📩 Ish beruvchi")],
+            [KeyboardButton(text="📩 Ishchi")],
+            [KeyboardButton(text="🔙 Asosiy menyu")]
+        ],
+        resize_keyboard=True
+    )
+    return keyboard

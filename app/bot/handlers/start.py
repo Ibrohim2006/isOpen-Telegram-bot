@@ -1,5 +1,5 @@
 from aiogram.filters import Command
-from app.bot.keyboards.reply import get_main_menu, get_user_type_menu
+from app.bot.keyboards.reply import get_main_menu, get_user_type_menu, get_admin_keyboard
 from aiogram import Router
 from aiogram import F
 from aiogram.fsm.context import FSMContext
@@ -21,4 +21,12 @@ async def register_handler(message: Message, state: FSMContext):
     await message.answer(
         "Iltimos, ro'yxatdan o'tish turini tanlang:",
         reply_markup=get_user_type_menu()
+    )
+
+
+@start_router.message(F.text == "ℹ️ Admin panel")
+async def admin_panel_handler(message: Message):
+    await message.answer(
+        "Admin panelga xush kelibsiz!",
+        reply_markup=get_admin_keyboard()
     )
