@@ -9,7 +9,6 @@ from app.bot.states.employer import EmployerForm
 from app.database.models import Employer
 from app.database.base import get_db
 from app.database.schemas.employer import EmployerModel
-from app.utils.validation import validate_telegram_username
 from app.core.logger import logger
 
 employer_router = Router()
@@ -51,32 +50,23 @@ async def process_employer(message: Message, state: FSMContext):
 async def process_office(message: Message, state: FSMContext):
     await state.update_data(office=message.text)
     await state.set_state(EmployerForm.technology)
-    await message.answer("Texnologiyani kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Texnologiyalarni kiriting:")
 
 
 @employer_router.message(EmployerForm.technology)
 async def process_technology(message: Message, state: FSMContext):
-    tech = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(technology=tech)
-    await state.set_state(EmployerForm.telegram_username)
-    await message.answer("Telegram foydalanuvchi nomini kiriting (@ bilan):")
+    await state.update_data(technology=message.text)
 
+    username = message.from_user.username
+    await state.update_data(telegram_username=f"@{username}" if username else None)
 
-@employer_router.message(EmployerForm.telegram_username)
-async def process_telegram_username(message: Message, state: FSMContext):
-    try:
-        validated_username = validate_telegram_username(message.text)
-        await state.update_data(telegram_username=validated_username)
-        await state.set_state(EmployerForm.area)
-        await message.answer("Hududni kiriting (yoki 'o'tkazib yuborish' deb yozing):")
-    except ValidationError as e:
-        await message.answer(f"Noto'g'ri Telegram nomi: {str(e)}")
+    await state.set_state(EmployerForm.area)
+    await message.answer("Hududni kiriting:")
 
 
 @employer_router.message(EmployerForm.area)
 async def process_area(message: Message, state: FSMContext):
-    area = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(area=area)
+    await state.update_data(area=message.text)
     await state.set_state(EmployerForm.responsible)
     await message.answer("Mas'ul shaxs nomini kiriting:")
 
@@ -85,37 +75,33 @@ async def process_area(message: Message, state: FSMContext):
 async def process_responsible(message: Message, state: FSMContext):
     await state.update_data(responsible=message.text)
     await state.set_state(EmployerForm.application_time)
-    await message.answer("Ariza vaqtini kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Murojaat vaqtini kiriting:")
 
 
 @employer_router.message(EmployerForm.application_time)
 async def process_application_time(message: Message, state: FSMContext):
-    app_time = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(application_time=app_time)
+    await state.update_data(application_time=message.text)
     await state.set_state(EmployerForm.working_hours)
-    await message.answer("Ish vaqtini kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Ish vaqtini kiriting:")
 
 
 @employer_router.message(EmployerForm.working_hours)
 async def process_working_hours(message: Message, state: FSMContext):
-    hours = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(working_hours=hours)
+    await state.update_data(working_hours=message.text)
     await state.set_state(EmployerForm.salary)
-    await message.answer("Maoshni kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Maoshni kiriting:")
 
 
 @employer_router.message(EmployerForm.salary)
 async def process_salary(message: Message, state: FSMContext):
-    salary = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(salary=salary)
+    await state.update_data(salary=message.text)
     await state.set_state(EmployerForm.additional)
-    await message.answer("Qo'shimcha ma'lumotlarni kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Qo'shimcha ma'lumotlarni kiriting:")
 
 
 @employer_router.message(EmployerForm.additional)
 async def process_additional(message: Message, state: FSMContext):
-    additional = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(additional=additional)
+    await state.update_data(additional=message.text)
 
     db = None
     try:
@@ -123,10 +109,25 @@ async def process_additional(message: Message, state: FSMContext):
         employer_data = EmployerModel(**data)
 
         db = next(get_db())
-        await save_employer_to_db(db, employer_data)
+        saved_employer = await save_employer_to_db(db, employer_data)
+
+        response_message = (
+            "✅ Ish beruvchi sifatida ro'yxatdan o'tish muvaffaqiyatli yakunlandi!\n\n"
+            "📋 Sizning ma'lumotlaringiz:\n"
+            f"🏢 Ofis nomi: {saved_employer.office}\n"
+            f"💻 Texnologiyalar: {saved_employer.technology}\n"
+            f"🔗 Telegram: {saved_employer.telegram_username}\n"
+            f"🌐 Hudud: {saved_employer.area}\n"
+            f"👤 Mas'ul shaxs: {saved_employer.responsible}\n"
+            f"⏰ Murojaat vaqti: {saved_employer.application_time}\n"
+            f"🕒 Ish vaqti: {saved_employer.working_hours}\n"
+            f"💰 Maosh: {saved_employer.salary}\n"
+            f"ℹ️ Qo'shimcha: {saved_employer.additional}\n\n"
+            "Ish izlovchilar tez orada siz bilan bog'lanadi!"
+        )
 
         await state.clear()
-        await message.answer("✅ Ish beruvchi sifatida ro'yxatdan o'tish muvaffaqiyatli yakunlandi!")
+        await message.answer(response_message)
     except ValidationError as e:
         await message.answer(f"❌ Ma'lumotlarda xatolik: {str(e)}")
     except Exception as e:

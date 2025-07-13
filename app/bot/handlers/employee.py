@@ -4,7 +4,6 @@ from aiogram.fsm.context import FSMContext
 from pydantic import ValidationError
 from datetime import datetime
 import pytz
-
 from app.bot.states.employee import EmployeeForm
 from app.database.models import Employee
 from app.database.base import get_db
@@ -59,27 +58,32 @@ async def process_full_name(message: Message, state: FSMContext):
         await state.update_data(full_name=validated_name)
         await state.set_state(EmployeeForm.age)
         await message.answer("Yoshingizni kiriting:")
-    except ValidationError as e:
-        await message.answer(f"Noto'g'ri ism: {str(e)}")
+    except ValueError as e:
+        await message.answer(f"Noto'g'ri ism.Misol: Aliyev Vali")
 
 
 @employee_router.message(EmployeeForm.age)
 async def process_age(message: Message, state: FSMContext):
     try:
         age = int(message.text)
-        if not 1 <= age <= 70:
-            raise ValueError("Yosh 1 dan 70 gacha bo'lishi kerak")
+        if not 16 <= age <= 70:
+            await message.answer("❌ Yosh noto'g'ri!\nYosh 16 dan 70 gacha bo'lishi kerak.")
+            return
         await state.update_data(age=age)
         await state.set_state(EmployeeForm.technology)
-        await message.answer("Texnologiyani kiriting (yoki 'o'tkazib yuborish' deb yozing):")
-    except ValueError as e:
-        await message.answer(f"Noto'g'ri yosh: {str(e)}")
+        await message.answer("Texnologiyani kiriting:")
+    except ValueError:
+        error_msg = (
+            "❌ Noto'g'ri format!\n\n"
+            "Yosh faqat raqamlarda ko'rsatilishi kerak.\n"
+            "Misol uchun: 25"
+        )
+        await message.answer(error_msg)
 
 
 @employee_router.message(EmployeeForm.technology)
 async def process_technology(message: Message, state: FSMContext):
-    tech = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(technology=tech)
+    await state.update_data(technology=message.text)
     await state.set_state(EmployeeForm.phone_number)
     await message.answer("Telefon raqamingizni kiriting:")
 
@@ -89,59 +93,47 @@ async def process_phone_number(message: Message, state: FSMContext):
     try:
         validated_phone = validate_phone_number(message.text)
         await state.update_data(phone_number=validated_phone)
-        await state.set_state(EmployeeForm.telegram_username)
-        await message.answer("Telegram foydalanuvchi nomini kiriting (@ bilan):")
-    except ValidationError as e:
-        await message.answer(f"Noto'g'ri telefon raqami: {str(e)}")
 
+        username = message.from_user.username
+        await state.update_data(telegram_username=f"@{username}" if username else None)
 
-@employee_router.message(EmployeeForm.telegram_username)
-async def process_telegram_username(message: Message, state: FSMContext):
-    try:
-        validated_username = validate_telegram_username(message.text)
-        await state.update_data(telegram_username=validated_username)
         await state.set_state(EmployeeForm.area)
-        await message.answer("Hududni kiriting (yoki 'o'tkazib yuborish' deb yozing):")
-    except ValidationError as e:
-        await message.answer(f"Noto'g'ri Telegram nomi: {str(e)}")
+        await message.answer("Hududni kiriting:")
+    except ValueError as e:
+        await message.answer(f"Noto'g'ri telefon raqami formati.Misol uchun +998992344556")
 
 
 @employee_router.message(EmployeeForm.area)
 async def process_area(message: Message, state: FSMContext):
-    area = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(area=area)
+    await state.update_data(area=message.text)
     await state.set_state(EmployeeForm.price)
-    await message.answer("Narxni kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Maoshni kiriting:")
 
 
 @employee_router.message(EmployeeForm.price)
 async def process_price(message: Message, state: FSMContext):
-    price = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(price=price)
+    await state.update_data(price=message.text)
     await state.set_state(EmployeeForm.profession)
-    await message.answer("Kasbni kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Kasbni kiriting:")
 
 
 @employee_router.message(EmployeeForm.profession)
 async def process_profession(message: Message, state: FSMContext):
-    profession = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(profession=profession)
+    await state.update_data(profession=message.text)
     await state.set_state(EmployeeForm.application_time)
-    await message.answer("Ariza vaqtini kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Murojaat vaqtini kiriting:")
 
 
 @employee_router.message(EmployeeForm.application_time)
 async def process_application_time(message: Message, state: FSMContext):
-    app_time = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(application_time=app_time)
+    await state.update_data(application_time=message.text)
     await state.set_state(EmployeeForm.purpose)
-    await message.answer("Maqsadni kiriting (yoki 'o'tkazib yuborish' deb yozing):")
+    await message.answer("Maqsadni kiriting:")
 
 
 @employee_router.message(EmployeeForm.purpose)
 async def process_purpose(message: Message, state: FSMContext):
-    purpose = None if message.text.lower() == "o'tkazib yuborish" else message.text
-    await state.update_data(purpose=purpose)
+    await state.update_data(purpose=message.text)
 
     db = None
     try:
@@ -149,10 +141,26 @@ async def process_purpose(message: Message, state: FSMContext):
         employee_data = EmployeeModel(**data)
 
         db = next(get_db())
-        await save_employee_to_db(db, employee_data)
+        saved_employee = await save_employee_to_db(db, employee_data)
+
+        response_message = (
+            "✅ Ishchi sifatida ro'yxatdan o'tish muvaffaqiyatli yakunlandi!\n\n"
+            "📋 Sizning ma'lumotlaringiz:\n"
+            f"👤 To'liq ism: {saved_employee.full_name}\n"
+            f"🎂 Yosh: {saved_employee.age}\n"
+            f"💻 Texnologiya: {saved_employee.technology}\n"
+            f"📞 Telefon: {saved_employee.phone_number}\n"
+            f"🔗 Telegram: {saved_employee.telegram_username}\n"
+            f"🌐 Hudud: {saved_employee.area}\n"
+            f"💰 Maosh: {saved_employee.price}\n"
+            f"🛠 Kasb: {saved_employee.profession}\n"
+            f"⏰ Murojaat vaqti: {saved_employee.application_time}\n"
+            f"🎯 Maqsad: {saved_employee.purpose}\n\n"
+            "Tez orada siz bilan bog'lanamiz!"
+        )
 
         await state.clear()
-        await message.answer("✅ Ishchi sifatida ro'yxatdan o'tish muvaffaqiyatli yakunlandi!")
+        await message.answer(response_message)
     except ValidationError as e:
         await message.answer(f"❌ Ma'lumotlarda xatolik: {str(e)}")
     except Exception as e:
